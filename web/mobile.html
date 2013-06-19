@@ -76,7 +76,9 @@
     </form>
 
     <div class="box" id="gyro">
-        <span class="head">Gyroscope</span>
+        <span class="head">Accelerometer / Gyroscope</span>
+        <span id="canHandleOrientationlabel"></span>
+        <span id="canHandleMotionlabel"></span>
         <span id="alphalabel"></span>
         <span id="betalabel"></span>
         <span id="gammalabel"></span>
@@ -102,22 +104,76 @@
 
     var socket = io.connect(document.location.host);
 
+    var canHandleOrientation = false;
+    var canHandleMotion = false;
+    var isDeviceMotionListenerAdded = false;
+    
     if (window.DeviceOrientationEvent) {
-        window.ondeviceorientation = function(event) {
-            beta = Math.round(event.beta);
-            gamma = Math.round(event.gamma);
-            if(id != -1){
-                socket.emit('gyroData', {id:id, beta:beta+offsetBeta, gamma:gamma+offsetGamma});
-            }
-        }
-
-    } else {
+	//Browser support device orientation, but device may not support it
+	window.addEventListener("deviceorientation", handleOrientation, false);
+    }
+ 
+    function handleOrientation(event){
+    //if device doesn't support orientation, this function is called only once with null event
+    //check http://www.html5rocks.com/en/tutorials/device/orientation/ for more details
+    
+      if (event.alpha)
+	canHandleOrientation = true; // device support orientation
+            
+      document.getElementById("canHandleOrientationlabel").innerHTML = "Device orientation support : " + canHandleOrientation;
+      
+      if (canHandleOrientation)
+      {
+	
+	beta = Math.round(event.beta);
+	gamma = Math.round(event.gamma);
+	if(id != -1){
+	    socket.emit('gyroData', {id:id, beta:beta+offsetBeta, gamma:gamma+offsetGamma});
+	}
+	
+      }else if (window.DeviceMotionEvent && !isDeviceMotionListenerAdded)
+      {
+	window.addEventListener('devicemotion', handleMotion, false);
+	isDeviceMotionListenerAdded = true;
+      }else
+      {
+	document.getElementById("no").style.display="block";
+        document.getElementById("yes").style.display="none";
+      }
+    }
+    
+    function handleMotion(event){
+      if(event.acceleration)
+      {
+	//requires a gyroscope to work.
+	document.getElementById("canHandleMotionlabel").innerHTML = "Device motion support : true";
+	beta = Math.round(event.acceleration.y * 9);
+	gamma = Math.round(event.acceleration.x * -9);
+	canHandleMotion = true;
+      }
+      else if (event.accelerationIncludingGravity)
+      {
+	//this is for iPhone 3GS or a device with no gyroscope, and includes gravity.
+	document.getElementById("canHandleMotionlabel").innerHTML = "Device motion support : true (without gyroscope)";
+	beta = Math.round(event.accelerationIncludingGravity.y * 9);
+	gamma = Math.round(event.accelerationIncludingGravity.x * -9);
+	canHandleMotion = true;
+      }
+      
+      if(id != -1){
+	  socket.emit('gyroData', {id:id, beta:beta+offsetBeta, gamma:gamma+offsetGamma});
+      }
+      
+      if (!canHandleOrientation && !canHandleMotion) {
         document.getElementById("no").style.display="block";
         document.getElementById("yes").style.display="none";
+      }
     }
+    
+    
 
     setInterval(function() {
-        document.getElementById("betalabel").innerHTML = "Front-Back: " + (beta+offsetBeta);
+	document.getElementById("betalabel").innerHTML = "Front-Back: " + (beta+offsetBeta);
         document.getElementById("gammalabel").innerHTML = "Left-Right: " + (gamma+offsetGamma);
     }, delay);
 
